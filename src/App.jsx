@@ -152,12 +152,11 @@ export default function App() {
   const fetchAiData = async (prompt, history = []) => {
     if (!NVIDIA_API_KEY) return 'API Key NVIDIA belum diatur. Silakan periksa file .env Anda.';
 
-    const systemPrompt = `Anda adalah Asisten AI untuk aplikasi 'Pembimbingta\''. 
+    const systemPrompt = `Anda adalah Asisten AI untuk aplikasi 'Pembimbingta\'. 
     Tugas Anda adalah membantu ${currentUser?.role === 'pembimbing' ? 'Dosen' : 'Mahasiswa'} dalam keluhan skripsi. 
     Balaslah dengan bahasa Indonesia yang sangat sopan, profesional, dan memberikan solusi akademik yang konkret. 
     Ingat konteks percakapan sebelumnya agar bisa 'tek-tokan'.`;
 
-    // Format NVIDIA sesuai dengan format OpenAI
     const formattedHistory = history.map(msg => ({
       role: msg.role === 'model' ? 'assistant' : 'user',
       content: msg.parts[0].text
@@ -174,7 +173,8 @@ export default function App() {
 
     while (retries > 0) {
       try {
-        const response = await fetch("/proxy-ai/v1/chat/completions", {
+        // Menggunakan Absolute URL langsung ke server NVIDIA untuk menghindari error proxy di Vercel
+        const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${NVIDIA_API_KEY}`,
@@ -189,7 +189,6 @@ export default function App() {
         });
 
         if (!response.ok) {
-           // Membongkar pesan error langsung dari NVIDIA
            const errorDetails = await response.text();
            console.error("Detail Error NVIDIA:", response.status, errorDetails);
            throw new Error(`API Error: ${response.status}`);
@@ -199,7 +198,7 @@ export default function App() {
         return result.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memberikan jawaban saat ini.';
         
       } catch (error) {
-        console.error("Sistem Gagal Memanggil AI:", error); // Menampilkan error di console
+        console.error("Sistem Gagal Memanggil AI:", error); 
         retries--;
         if (retries === 0) return 'Koneksi ke Asisten AI terputus. Mohon periksa kembali API Key atau koneksi internet Anda.';
         await new Promise(res => setTimeout(res, delay));
@@ -246,7 +245,6 @@ export default function App() {
     const userKey = name.toLowerCase();
     const user = users[userKey];
 
-    // Login bersifat tidak case-sensitive untuk memastikan kelancaran akses
     if (user && (user.password || '').toLowerCase() === password.toLowerCase()) {
       if (user.role !== selectedRole) {
          setErrorMsg(`Akun ini terdaftar sebagai ${user.role}, bukan ${selectedRole}.`);
@@ -286,8 +284,8 @@ export default function App() {
 
     setIsLoading(false);
     if (error) {
-      console.error("Detail Error Supabase:", error); // Muncul di Inspect Console
-      setErrorMsg(`Gagal: ${error.message}`); // Muncul langsung di layar merah
+      console.error("Detail Error Supabase:", error); 
+      setErrorMsg(`Gagal: ${error.message}`); 
     } else {
       setShowSuccessPopup(true);
     }
@@ -349,8 +347,8 @@ export default function App() {
     setUploadDriveLink('');
   };
 
-const handleUploadDoc = async (stepName, index) => {
-    // 1. Validasi Input Awal
+  // ─── PERBAIKAN: Fungsi Upload Dokumen Disederhanakan ───────────────────────
+  const handleUploadDoc = async (stepName, index) => {
     if (!uploadFile && !uploadDriveLink.trim()) {
       setDocError('Mohon pilih file dokumen atau masukkan link Google Drive!');
       return;
@@ -359,80 +357,30 @@ const handleUploadDoc = async (stepName, index) => {
       setDocError('Mohon sertakan catatan revisi!'); 
       return; 
     }
-
     if (uploadFile && uploadFile.size > 10 * 1024 * 1024) {
       setDocError('Ukuran file terlalu besar! (Maksimal 10 MB). Silakan gunakan link Google Drive.');
       return;
     }
-setDocError('Sedang mengunggah dan menyimpan data, mohon tunggu...');
+    setDocError('Sedang mengunggah dan menyimpan data, mohon tunggu...');
 
-  let uploadedFileUrl = null;
-  let fileNameUrl = null;
-  let isImageFile = false;
+    let uploadedFileUrl = null;
+    let fileNameUrl = null;
+    let isImageFile = false;
 
-  try {
-    // 2. Jika user memilih untuk upload File ke Storage
-    if (uploadFile) {
-      // Bersihkan nama file dari karakter spasi dan simbol aneh
-      const cleanFileName = uploadFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
-      const filePath = `documents/${Date.now()}_${cleanFileName}`;
+    try {
+      if (uploadFile) {
+        const cleanFileName = uploadFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const filePath = `documents/${Date.now()}_${cleanFileName}`;
 
-      const { data: storageData, error: storageError } = await supabase.storage
-        .from('documents_bucket')
-        .upload(filePath, uploadFile);
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('documents_bucket')
+          .upload(filePath, uploadFile);
 
-      if (storageError) {
-        console.error("Gagal Upload Storage:", storageError.message);
-        setDocError('Gagal mengunggah file ke server.');
-        return;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('documents_bucket')
-        .getPublicUrl(filePath);
-
-      // Mengisi variabel let yang sudah dideklarasikan di atas (TIDAK boleh pakai const lagi)
-      fileNameUrl = cleanFileName;
-      uploadedFileUrl = publicUrlData?.publicUrl;
-      isImageFile = uploadFile.type ? uploadFile.type.startsWith('image/') : false;
-    }
-
-    // 3. Proses Simpan Data Teks & URL ke Database Supabase
-    const currentUserId = currentUser?.id || 'anonymous';
-    const chatId = `chat_${currentUserId}`;
-    const timestampISO = new Date().toISOString();
-
-    const { data: dbData, error: dbError } = await supabase
-      .from('documents')
-      .insert({
-        chat_id: chatId,
-        step: stepName,
-        note: uploadNote || "",
-        file_name: fileNameUrl,
-        file_url: uploadedFileUrl,
-        drive_link: uploadDriveLink ? uploadDriveLink.trim() : null,
-        is_image: isImageFile,
-        timestamp: timestampISO
-      })
-      .select();
-
-    if (dbError) {
-      console.error("--- DETAIL ERROR DATABASE ---");
-      console.error("Pesan Error:", dbError.message);
-      setDocError(`Gagal simpan data ke database: ${dbError.message}`);
-      return;
-    }
-
-    // Jika berhasil semuanya, reset form atau berikan notifikasi sukses
-    setDocError('');
-    setUploadFile(null);
-    setUploadDriveLink('');
-
-  } catch (globalError) {
-    console.error("Error tidak terduga:", globalError);
-    setDocError('Terjadi kesalahan sistem saat memproses dokumen.');
-  }
-}; // <-- Batas penutup fungsi handleUploadDoc
+        if (storageError) {
+          console.error("Gagal Upload Storage:", storageError.message);
+          setDocError('Gagal mengunggah file ke server.');
+          return;
+        }
 
         const { data: publicUrlData } = supabase.storage
           .from('documents_bucket')
@@ -440,24 +388,22 @@ setDocError('Sedang mengunggah dan menyimpan data, mohon tunggu...');
 
         fileNameUrl = cleanFileName;
         uploadedFileUrl = publicUrlData?.publicUrl;
-        isImageFile = uploadFile.type.startsWith('image/');
+        isImageFile = uploadFile.type ? uploadFile.type.startsWith('image/') : false;
       }
 
-      // 3. Menyiapkan data teks untuk disetor ke database
-      const chatId = `chat_${currentUser?.id}`;
-      const timestampISO = new Date().toISOString(); // Menggunakan format standar ISO dunia
+      const currentUserId = currentUser?.id || 'anonymous';
+      const chatId = `chat_${currentUserId}`;
+      const timestampISO = new Date().toISOString();
 
-      // 4. Proses Simpan Data Teks Ke Tabel 'documents'
       const { data: dbData, error: dbError } = await supabase
         .from('documents')
         .insert({
-          // BARIS 'id' DIHAPUS agar diisi otomatis oleh UUID Supabase
           chat_id: chatId,
           step: stepName,
           note: uploadNote || "",
           file_name: fileNameUrl,
           file_url: uploadedFileUrl,
-          drive_link: uploadDriveLink?.trim() || null,
+          drive_link: uploadDriveLink ? uploadDriveLink.trim() : null,
           is_image: isImageFile,
           timestamp: timestampISO
         })
@@ -469,45 +415,27 @@ setDocError('Sedang mengunggah dan menyimpan data, mohon tunggu...');
         return;
       }
 
-      // 5. Jika sukses semuanya, bersihkan form input aplikasi
+      // Notifikasi via chat
+      const infoSumber = fileNameUrl ? `file: ${fileNameUrl}` : `Link Google Drive`;
+      await sendMessage(
+          `[Sistem] Mahasiswa mengunggah revisi (${infoSumber}) & catatan untuk tahap: ${stepName}`,
+          currentUser.id,
+          'admin',
+          true
+      );
+
+      // Bersihkan Form
       setDocError('');
       setUploadFile(null);
       setUploadDriveLink('');
-      
-      // Jika di kode lamatmu ada fungsi penutup modal otomatis, 
-      // kamu bisa selipkan nama fungsinya di sini (misal: toggleStepForm(index);)
+      setUploadNote('');
+      setOpenStepForms(prev => ({ ...prev, [index]: false }));
 
     } catch (globalError) {
       console.error("Error tidak terduga:", globalError);
       setDocError('Terjadi kesalahan sistem saat memproses dokumen.');
     }
-  };      // Jika berhasil semuanya, reset form atau berikan notifikasi sukses
-      setDocError('');
-      setUploadFile(null);
-      setUploadDriveLink('');
-      // Tambahkan fungsi penutup modal bimbingan kamu di sini jika ada (misal: toggleStepForm(index))
-
-    } catch (globalError) {
-      console.error("Error tidak terduga:", globalError);
-      setDocError('Terjadi kesalahan sistem saat memproses dokumen.');
-    }
-  }; // <--- Batas penutup fungsi handleUploadDoc
-    // ========================================================
-
-    const infoSumber = fileNameUrl ? `file: ${fileNameUrl}` : `Link Google Drive`;
-    await sendMessage(
-        `[Sistem] Mahasiswa mengunggah revisi (${infoSumber}) & catatan untuk tahap: ${stepName}`,
-        currentUser.id,
-        'admin',
-        true
-    );
-
-    setUploadNote('');
-    setUploadFile(null);
-    setUploadDriveLink('');
-    setDocError('');
-    setOpenStepForms(prev => ({ ...prev, [index]: false }));
-  };
+  }; 
 
   const handleRequestAccess = (stepName) => {
     sendMessage(`[Sistem] Mahasiswa meminta akses untuk tahap: ${stepName}`, currentUser.id, 'admin', true);
