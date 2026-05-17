@@ -349,53 +349,90 @@ export default function App() {
     setUploadDriveLink('');
   };
 
-// ========================================================
-    // KODE PERBAIKAN BARU (MASUKKAN DI DALAM IF (uploadFile) PADA FUNGSI KAMU)
-    // ========================================================
-    const cleanFileName = uploadFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
-    const filePath = `documents/${Date.now()}_${cleanFileName}`;
+const handleUploadDoc = async (stepName, index) => {
+    if (!uploadFile && !uploadDriveLink.trim()) {
+      setDocError('Mohon pilih file dokumen atau masukkan link Google Drive!');
+      return;
+    }
+    if (!uploadNote.trim()) { 
+      setDocError('Mohon sertakan catatan revisi!'); 
+      return; 
+    }
 
-    const { data: storageData, error: storageError } = await supabase.storage
-      .from('documents_bucket')
-      .upload(filePath, uploadFile);
-
-    if (storageError) {
-      console.error("Gagal Upload Storage:", storageError.message);
-      setDocError('Gagal mengunggah file ke server.');
+    if (uploadFile && uploadFile.size > 10 * 1024 * 1024) {
+      setDocError('Ukuran file terlalu besar! (Maksimal 10 MB). Silakan gunakan link Google Drive.');
       return;
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from('documents_bucket')
-      .getPublicUrl(filePath);
+    setDocError('Sedang mengunggah dan menyimpan data, mohon tunggu...');
 
-    fileNameUrl = cleanFileName;
-    uploadedFileUrl = publicUrlData?.publicUrl;
-    isImageFile = uploadFile.type.startsWith('image/');
-    
-    const chatId = `chat_${currentUser?.id}`;
-    const timestampISO = new Date().toISOString(); 
+    let uploadedFileUrl = null;
+    let fileNameUrl = null;
+    let isImageFile = false;
 
-    const { data: dbData, error: dbError } = await supabase
-      .from('documents')
-      .insert({
-        chat_id: chatId,
-        step: stepName,
-        note: uploadNote || "",
-        file_name: fileNameUrl,
-        file_url: uploadedFileUrl,
-        drive_link: uploadDriveLink?.trim() || null,
-        is_image: isImageFile,
-        timestamp: timestampISO 
-      })
-      .select();
+    // --- DI SINI PROSES UTAMANYA AWAL ---
+    try {
+      if (uploadFile) {
+        // Bersihkan nama file agar tidak bad request
+        const cleanFileName = uploadFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const filePath = `documents/${Date.now()}_${cleanFileName}`;
 
-    if (dbError) {
-      console.error("--- DETAIL ERROR DATABASE ---");
-      console.error("Pesan Error:", dbError.message);
-      setDocError(`Gagal simpan data ke database: ${dbError.message}`);
-      return;
+        // Proses upload dengan await (Aman karena ada di dalam async handleUploadDoc)
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('documents_bucket')
+          .upload(filePath, uploadFile);
+
+        if (storageError) {
+          console.error("Gagal Upload Storage:", storageError.message);
+          setDocError('Gagal mengunggah file ke server.');
+          return;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents_bucket')
+          .getPublicUrl(filePath);
+
+        fileNameUrl = cleanFileName;
+        uploadedFileUrl = publicUrlData?.publicUrl;
+        isImageFile = uploadFile.type.startsWith('image/');
+      }
+
+      // Siapkan data teks untuk database
+      const chatId = `chat_${currentUser?.id}`;
+      const timestampISO = new Date().toISOString();
+
+      // Proses insert dengan await
+      const { data: dbData, error: dbError } = await supabase
+        .from('documents')
+        .insert({
+          chat_id: chatId,
+          step: stepName,
+          note: uploadNote || "",
+          file_name: fileNameUrl,
+          file_url: uploadedFileUrl,
+          drive_link: uploadDriveLink?.trim() || null,
+          is_image: isImageFile,
+          timestamp: timestampISO
+        })
+        .select();
+
+      if (dbError) {
+        console.error("Detail Error Database:", dbError.message);
+        setDocError(`Gagal simpan data ke database: ${dbError.message}`);
+        return;
+      }
+
+      // Jika berhasil semuanya, reset form atau berikan notifikasi sukses
+      setDocError('');
+      setUploadFile(null);
+      setUploadDriveLink('');
+      // Tambahkan fungsi penutup modal bimbingan kamu di sini jika ada (misal: toggleStepForm(index))
+
+    } catch (globalError) {
+      console.error("Error tidak terduga:", globalError);
+      setDocError('Terjadi kesalahan sistem saat memproses dokumen.');
     }
+  }; // <--- Batas penutup fungsi handleUploadDoc
     // ========================================================
 
     const infoSumber = fileNameUrl ? `file: ${fileNameUrl}` : `Link Google Drive`;
