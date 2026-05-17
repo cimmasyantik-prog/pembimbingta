@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GraduationCap, LogOut, CheckCircle, Lock, BookOpen, Send, User, UploadCloud, MessageSquare, AlertCircle, Bot, Info, FileText, ChevronDown, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { GraduationCap, LogOut, CheckCircle, Lock, BookOpen, Send, User, UploadCloud, MessageSquare, AlertCircle, Bot, Info, FileText, ChevronDown, Sparkles, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // ============================================================
@@ -304,8 +304,26 @@ export default function App() {
     setTopicKeyword('');
   };
 
-  const approveStudent = async (userId) => { await supabase.from('users').update({ status: 'approved' }).eq('id', userId); };
-  const handleUnlockStep = async (userId, newVal) => { await supabase.from('users').update({ unlocked_step_index: newVal }).eq('id', userId); };
+  // ─── Kontrol Admin/Dosen ───────────────────────────────────────────────────
+  const approveStudent = async (userId) => { 
+    await supabase.from('users').update({ status: 'approved' }).eq('id', userId); 
+  };
+  
+  const rejectStudent = async (userId) => {
+    if (window.confirm('Tolak pendaftaran mahasiswa ini? Akun mereka akan dihapus dari sistem.')) {
+      await supabase.from('users').delete().eq('id', userId);
+    }
+  };
+
+  const removeStudent = async (userId) => {
+    if (window.confirm('Yakin ingin mengeluarkan mahasiswa ini dari daftar bimbingan? Seluruh akses login mereka akan dicabut.')) {
+      await supabase.from('users').delete().eq('id', userId);
+    }
+  };
+
+  const handleUnlockStep = async (userId, newVal) => { 
+    await supabase.from('users').update({ unlocked_step_index: newVal }).eq('id', userId); 
+  };
 
   // ─── Chat & Docs ───────────────────────────────────────────────────────────
   const sendMessage = async (text, senderId, receiverId, isSystem = false) => {
@@ -645,12 +663,14 @@ export default function App() {
     const studentList = Object.values(users).filter(u => u.role === 'mahasiswa');
     const pendingStudents = studentList.filter(u => u.status === 'pending');
     const approvedStudents = studentList.filter(u => u.status === 'approved');
+    
     return (
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-slate-800">Daftar Mahasiswa Bimbingan</h2>
           <div className="text-sm text-slate-500 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-100">Total: {approvedStudents.length} Mahasiswa</div>
         </div>
+        
         {pendingStudents.length > 0 && (
           <div className="mb-8 p-4 bg-orange-50 border border-orange-200 rounded-xl">
             <h3 className="text-orange-800 font-semibold mb-3 flex items-center"><User className="w-4 h-4 mr-2" /> Menunggu Konfirmasi ({pendingStudents.length})</h3>
@@ -661,12 +681,16 @@ export default function App() {
                     <p className="font-semibold text-slate-800 text-sm">{student.name}</p>
                     <p className="text-xs text-slate-500">{student.jurusan}</p>
                   </div>
-                  <button onClick={() => approveStudent(student.id)} className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-md">Terima</button>
+                  <div className="flex space-x-2">
+                    <button onClick={() => approveStudent(student.id)} className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-md transition-colors font-medium">Terima</button>
+                    <button onClick={() => rejectStudent(student.id)} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs px-3 py-1.5 rounded-md transition-colors font-medium">Tolak</button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
+        
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {approvedStudents.length === 0 ? (
             <div className="col-span-full text-center py-12 text-slate-500 bg-white rounded-xl border border-dashed border-slate-300">Belum ada mahasiswa yang dikonfirmasi.</div>
@@ -675,7 +699,7 @@ export default function App() {
               const chatData = chats[`chat_${student.id}`] || {};
               const unreadCount = chatData.unreadForPembimbing || 0;
               return (
-                <div key={student.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative">
+                <div key={student.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative group">
                   {unreadCount > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse border-2 border-white shadow-sm z-10">{unreadCount} Baru</span>
                   )}
@@ -703,8 +727,11 @@ export default function App() {
                       </select>
                       <ChevronDown className="w-3 h-3 absolute right-2 top-2.5 text-slate-400 pointer-events-none" />
                     </div>
-                    <button onClick={() => openChatForStudent(student)} className="bg-slate-800 text-white text-xs px-3 py-2 rounded-lg hover:bg-slate-700 flex items-center justify-center">
+                    <button onClick={() => openChatForStudent(student)} className="bg-slate-800 text-white text-xs px-3 py-2 rounded-lg hover:bg-slate-700 flex items-center justify-center transition-colors">
                       <MessageSquare className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => removeStudent(student.id)} className="bg-red-50 text-red-600 border border-red-200 text-xs px-3 py-2 rounded-lg hover:bg-red-100 flex items-center justify-center transition-colors" title="Keluarkan Mahasiswa">
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
