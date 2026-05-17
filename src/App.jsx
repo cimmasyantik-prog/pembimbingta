@@ -390,27 +390,29 @@ export default function App() {
             
         uploadedFileUrl = publicUrlData.publicUrl;
     }
+const chatId = `chat_${currentUser.id}`;
+// Perbaikan format waktu agar diterima database Supabase
+const timestamp = new Date().toISOString(); 
 
-    const chatId = `chat_${currentUser.id}`;
-    const now = new Date();
-    const timestamp = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const { error: dbError } = await supabase
+  .from('documents')
+  .insert({
+    // BARIS ID DIHAPUS (Supabase akan membuat UUID otomatis)
+    chat_id: chatId,
+    step: stepName,
+    note: uploadNote,
+    file_name: fileNameUrl,
+    file_url: uploadedFileUrl,
+    drive_link: uploadDriveLink.trim() || null,
+    is_image: isImageFile,
+    timestamp: timestamp // Sekarang formatnya sudah aman (ISO String)
+  });
 
-    const { error: dbError } = await supabase.from('documents').insert({
-        id: Date.now(),
-        chat_id: chatId,
-        step: stepName,
-        note: uploadNote,
-        file_name: fileNameUrl,
-        file_url: uploadedFileUrl,
-        drive_link: uploadDriveLink.trim() || null,
-        is_image: isImageFile,
-        timestamp
-    });
-
-    if (dbError) {
-        setDocError('File berhasil diunggah, tetapi gagal menyimpan data ke database.');
-        return;
-    }
+if (dbError) {
+  console.error("Detail Error Supabase:", dbError); // Tambahkan ini biar kelihatan di konsol kalau ada error lain
+  setDocError('File berhasil diunggah, tetapi gagal menyimpan data ke database.');
+  return;
+}
 
     const infoSumber = fileNameUrl ? `file: ${fileNameUrl}` : `Link Google Drive`;
     await sendMessage(
