@@ -173,7 +173,6 @@ export default function App() {
 
     while (retries > 0) {
       try {
-        // Menggunakan Absolute URL langsung ke server NVIDIA untuk menghindari error proxy di Vercel
         const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -347,7 +346,6 @@ export default function App() {
     setUploadDriveLink('');
   };
 
-  // ─── PERBAIKAN: Fungsi Upload Dokumen Disederhanakan ───────────────────────
   const handleUploadDoc = async (stepName, index) => {
     if (!uploadFile && !uploadDriveLink.trim()) {
       setDocError('Mohon pilih file dokumen atau masukkan link Google Drive!');
@@ -415,7 +413,6 @@ export default function App() {
         return;
       }
 
-      // Notifikasi via chat
       const infoSumber = fileNameUrl ? `file: ${fileNameUrl}` : `Link Google Drive`;
       await sendMessage(
           `[Sistem] Mahasiswa mengunggah revisi (${infoSumber}) & catatan untuk tahap: ${stepName}`,
@@ -424,7 +421,6 @@ export default function App() {
           true
       );
 
-      // Bersihkan Form
       setDocError('');
       setUploadFile(null);
       setUploadDriveLink('');
