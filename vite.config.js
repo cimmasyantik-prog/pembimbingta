@@ -39,7 +39,7 @@ export default defineConfig({
   server: {
     proxy: {
       // Mengarahkan semua request '/api/nvidia' ke server asli NVIDIA (Agar tidak error CORS)
-      '/api/nvidia': {
+      '/proxy-ai': {
         target: 'https://integrate.api.nvidia.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/nvidia/, '')
