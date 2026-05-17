@@ -350,6 +350,7 @@ export default function App() {
   };
 
 const handleUploadDoc = async (stepName, index) => {
+    // 1. Validasi Input Awal
     if (!uploadFile && !uploadDriveLink.trim()) {
       setDocError('Mohon pilih file dokumen atau masukkan link Google Drive!');
       return;
@@ -370,14 +371,13 @@ const handleUploadDoc = async (stepName, index) => {
     let fileNameUrl = null;
     let isImageFile = false;
 
-    // --- DI SINI PROSES UTAMANYA AWAL ---
     try {
+      // 2. Jika user memilih untuk upload File ke Storage
       if (uploadFile) {
-        // Bersihkan nama file agar tidak bad request
+        // Bersihkan nama file dari spasi dan karakter aneh agar tidak memicu error 400
         const cleanFileName = uploadFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
         const filePath = `documents/${Date.now()}_${cleanFileName}`;
 
-        // Proses upload dengan await (Aman karena ada di dalam async handleUploadDoc)
         const { data: storageData, error: storageError } = await supabase.storage
           .from('documents_bucket')
           .upload(filePath, uploadFile);
@@ -397,14 +397,15 @@ const handleUploadDoc = async (stepName, index) => {
         isImageFile = uploadFile.type.startsWith('image/');
       }
 
-      // Siapkan data teks untuk database
+      // 3. Menyiapkan data teks untuk disetor ke database
       const chatId = `chat_${currentUser?.id}`;
-      const timestampISO = new Date().toISOString();
+      const timestampISO = new Date().toISOString(); // Menggunakan format standar ISO dunia
 
-      // Proses insert dengan await
+      // 4. Proses Simpan Data Teks Ke Tabel 'documents'
       const { data: dbData, error: dbError } = await supabase
         .from('documents')
         .insert({
+          // BARIS 'id' DIHAPUS agar diisi otomatis oleh UUID Supabase
           chat_id: chatId,
           step: stepName,
           note: uploadNote || "",
@@ -422,7 +423,19 @@ const handleUploadDoc = async (stepName, index) => {
         return;
       }
 
-      // Jika berhasil semuanya, reset form atau berikan notifikasi sukses
+      // 5. Jika sukses semuanya, bersihkan form input aplikasi
+      setDocError('');
+      setUploadFile(null);
+      setUploadDriveLink('');
+      
+      // Jika di kode lamatmu ada fungsi penutup modal otomatis, 
+      // kamu bisa selipkan nama fungsinya di sini (misal: toggleStepForm(index);)
+
+    } catch (globalError) {
+      console.error("Error tidak terduga:", globalError);
+      setDocError('Terjadi kesalahan sistem saat memproses dokumen.');
+    }
+  };      // Jika berhasil semuanya, reset form atau berikan notifikasi sukses
       setDocError('');
       setUploadFile(null);
       setUploadDriveLink('');
