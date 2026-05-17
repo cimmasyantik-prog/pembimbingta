@@ -364,29 +364,75 @@ const handleUploadDoc = async (stepName, index) => {
       setDocError('Ukuran file terlalu besar! (Maksimal 10 MB). Silakan gunakan link Google Drive.');
       return;
     }
+setDocError('Sedang mengunggah dan menyimpan data, mohon tunggu...');
 
-    setDocError('Sedang mengunggah dan menyimpan data, mohon tunggu...');
+  let uploadedFileUrl = null;
+  let fileNameUrl = null;
+  let isImageFile = false;
 
-    let uploadedFileUrl = null;
-    let fileNameUrl = null;
-    let isImageFile = false;
+  try {
+    // 2. Jika user memilih untuk upload File ke Storage
+    if (uploadFile) {
+      // Bersihkan nama file dari karakter spasi dan simbol aneh
+      const cleanFileName = uploadFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+      const filePath = `documents/${Date.now()}_${cleanFileName}`;
 
-    try {
-      // 2. Jika user memilih untuk upload File ke Storage
-      if (uploadFile) {
-        // Bersihkan nama file dari spasi dan karakter aneh agar tidak memicu error 400
-        const cleanFileName = uploadFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const filePath = `documents/${Date.now()}_${cleanFileName}`;
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('documents_bucket')
+        .upload(filePath, uploadFile);
 
-        const { data: storageData, error: storageError } = await supabase.storage
-          .from('documents_bucket')
-          .upload(filePath, uploadFile);
+      if (storageError) {
+        console.error("Gagal Upload Storage:", storageError.message);
+        setDocError('Gagal mengunggah file ke server.');
+        return;
+      }
 
-        if (storageError) {
-          console.error("Gagal Upload Storage:", storageError.message);
-          setDocError('Gagal mengunggah file ke server.');
-          return;
-        }
+      const { data: publicUrlData } = supabase.storage
+        .from('documents_bucket')
+        .getPublicUrl(filePath);
+
+      // Mengisi variabel let yang sudah dideklarasikan di atas (TIDAK boleh pakai const lagi)
+      fileNameUrl = cleanFileName;
+      uploadedFileUrl = publicUrlData?.publicUrl;
+      isImageFile = uploadFile.type ? uploadFile.type.startsWith('image/') : false;
+    }
+
+    // 3. Proses Simpan Data Teks & URL ke Database Supabase
+    const currentUserId = currentUser?.id || 'anonymous';
+    const chatId = `chat_${currentUserId}`;
+    const timestampISO = new Date().toISOString();
+
+    const { data: dbData, error: dbError } = await supabase
+      .from('documents')
+      .insert({
+        chat_id: chatId,
+        step: stepName,
+        note: uploadNote || "",
+        file_name: fileNameUrl,
+        file_url: uploadedFileUrl,
+        drive_link: uploadDriveLink ? uploadDriveLink.trim() : null,
+        is_image: isImageFile,
+        timestamp: timestampISO
+      })
+      .select();
+
+    if (dbError) {
+      console.error("--- DETAIL ERROR DATABASE ---");
+      console.error("Pesan Error:", dbError.message);
+      setDocError(`Gagal simpan data ke database: ${dbError.message}`);
+      return;
+    }
+
+    // Jika berhasil semuanya, reset form atau berikan notifikasi sukses
+    setDocError('');
+    setUploadFile(null);
+    setUploadDriveLink('');
+
+  } catch (globalError) {
+    console.error("Error tidak terduga:", globalError);
+    setDocError('Terjadi kesalahan sistem saat memproses dokumen.');
+  }
+}; // <-- Batas penutup fungsi handleUploadDoc
 
         const { data: publicUrlData } = supabase.storage
           .from('documents_bucket')
