@@ -32,6 +32,68 @@ const AI_MESSAGES = [
   "Malam ini jangan lupa cicil daftar pustaka, biar besok lebih ringan. Kamu pasti bisa!"
 ];
 
+// ─── KOMPONEN TOMBOL DINAMIS (BISA DIGESER) ────────────────────────────────
+const DraggableFAB = ({ onClick, icon, unreadCount, bgColor = "bg-blue-600", hoverColor = "hover:bg-blue-700" }) => {
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const dragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0, dragged: false });
+
+  const handlePointerDown = (e) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current.isDragging = true;
+    dragRef.current.dragged = false;
+    dragRef.current.startX = e.clientX;
+    dragRef.current.startY = e.clientY;
+    dragRef.current.initialX = pos.x;
+    dragRef.current.initialY = pos.y;
+  };
+
+  const handlePointerMove = (e) => {
+    if (!dragRef.current.isDragging) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    
+    // Jika digeser lebih dari 5 pixel, tandai sebagai 'drag' bukan 'klik'
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      dragRef.current.dragged = true;
+    }
+    
+    setPos({
+      x: dragRef.current.initialX + dx,
+      y: dragRef.current.initialY + dy
+    });
+  };
+
+  const handlePointerUp = (e) => {
+    dragRef.current.isDragging = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const handleClick = (e) => {
+    if (dragRef.current.dragged) {
+      e.preventDefault();
+      return;
+    }
+    onClick();
+  };
+
+  return (
+    <button
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onClick={handleClick}
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)`, touchAction: 'none' }}
+      className={`fixed bottom-6 right-6 ${bgColor} text-white p-4 rounded-full shadow-lg transition-colors ${hoverColor} z-40 flex items-center justify-center cursor-grab active:cursor-grabbing`}
+    >
+      {icon}
+      {unreadCount > 0 && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-white animate-bounce">{unreadCount}</span>
+      )}
+    </button>
+  );
+};
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const [isDbReady, setIsDbReady] = useState(false);
   const [view, setView] = useState('role_selection');
@@ -180,7 +242,7 @@ export default function App() {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            model: "meta/llama-3.1-70b-instruct", 
+            model: "meta/llama-3.1-8b-instruct", 
             messages: messages,
             temperature: 0.7,
             max_tokens: 1024
@@ -646,15 +708,14 @@ export default function App() {
           </div>
         </div>
 
-        <button
+        {/* TOMBOL CHAT MAHASISWA YANG BISA DIGESER */}
+        <DraggableFAB 
           onClick={() => { setActiveChatUser({ id: 'admin', name: 'Pembimbingta' }); setActiveTab('chat'); clearUnread(currentUser.id, 'mahasiswa'); }}
-          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-transform hover:scale-105 z-40"
-        >
-          <MessageSquare className="w-6 h-6" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-white animate-bounce">{unreadCount}</span>
-          )}
-        </button>
+          icon={<MessageSquare className="w-6 h-6" />}
+          unreadCount={unreadCount}
+          bgColor="bg-blue-600"
+          hoverColor="hover:bg-blue-700"
+        />
       </div>
     );
   };
@@ -739,12 +800,15 @@ export default function App() {
             })
           )}
         </div>
-        <button
+
+        {/* TOMBOL AI DOSEN YANG BISA DIGESER */}
+        <DraggableFAB 
           onClick={() => { setActiveChatUser({ id: 'ai_pembimbing', name: 'Asisten AI Akademik' }); setActiveTab('ai'); }}
-          className="fixed bottom-6 right-6 bg-emerald-600 text-white p-4 rounded-full shadow-lg hover:bg-emerald-700 transition-transform hover:scale-105 z-40"
-        >
-          <Bot className="w-6 h-6" />
-        </button>
+          icon={<Bot className="w-6 h-6" />}
+          unreadCount={0}
+          bgColor="bg-emerald-600"
+          hoverColor="hover:bg-emerald-700"
+        />
       </div>
     );
   };
