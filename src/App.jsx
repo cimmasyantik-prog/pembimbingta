@@ -235,7 +235,7 @@ export default function App() {
 
     while (retries > 0) {
       try {
-        const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+        const response = await fetch("/proxy-ai/v1/chat/completions", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${NVIDIA_API_KEY}`,
